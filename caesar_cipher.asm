@@ -1,13 +1,18 @@
 segment .rodata
-    help db 0xa,'USAGE:', 0xa, './caesar "[ MESSAGE ]" [ ROT_NUMBER ]', 0xa
+    help db 0xa,'USAGE:', 0xa, './caesar "[ MESSAGE ]"', 0xa
     lhelp equ $ - help
+
+    rot db 'Enter the ROT number: ',0xa
+    lrot equ $ - rot
 
     break db 0xa
     lbreak equ $ - break
 
+segment .data
+    rot_value db 00
+
 segment .bss
     cript resb 0x400
-    rot_value resb 0x04
 
 section .text
 
@@ -15,62 +20,100 @@ section .text
 _start:
     cmp byte [esp], 0x01
     je _usage
-    
-    ; get size of the string
-    mov eax, [esp+0x12]
-    ;sub eax, '0'
-    mov [rot_value], eax
 
+    ;; GETTING THE PARAM STRING
     mov eax, [esp+0x08]     ; get the string
-    ;mov edx, [esp+0x12]     ; get the rot value
+    mov esi, eax
 
+    ;; SHOW THE MESSAGE TO ENTER THE ROT NUMBER
+    push lrot
+    push rot
+    call _print
 
-    ;mov eax, edx
+    ;; ENTER A DIGIT
+    mov edx, 0x04
+    mov ecx, rot_value
+    mov ebx, 0x00               ; stdin
+    mov eax, 0x03               ; syswrite()
+    int 0x80
 
+    mov edx, rot_value          ; store in edx
+
+    ;; MOVING TO EAX THE STRING
+    mov eax, esi
+
+    ;; GET THE SIZE OF PARAM STRING
     call _getsize
 
-    ;encript msg
-    mov esi, ebx        ; mov to esi the len of the string
-    xor ebx, ebx        ; clear ebx
-    call _encript
 
-    jmp end
+    ;; ENCRIPT THE STRING
+    mov esi, ebx                ; mov to esi the len of the string
+    xor ebx, ebx                ; clear ebx
+    call _encript               ; encript the string
+
+    jmp end                     ; end
 
 
 _getsize:
-    cmp byte [eax+ebx], 0x00
-    jne _lgs
-    ret
+    cmp byte [eax+ebx], 0x00    ; compare the char with null
+    jne _lgs                    ; if not null -> jmp _lgs
+    ret                         ; ret
 
     _lgs:
-        inc ebx
-        jmp _getsize
+        inc ebx                 ; increment ebx
+        jmp _getsize            ; check the next char jumping to _getsize
 
 _encript:
-    cmp ebx, esi
-    jne _lenc
-    inc ebx
-    mov byte[cript+ebx], 0x00
+    cmp ebx, esi                ; compare ebx == length of string
+    jne _lenc                   ; if not equal -> rot
+    inc ebx                     ; increment bx
+    mov byte[cript+ebx], 0x00   ; empty cript variable
 
     push esi
     push cript
 
-    call _print
+    call _print                 ; print the string
 
     push lbreak
     push break
-    call _print
+    call _print                 ; break the line
 
     jmp end
 
-    _lenc:
+    _lenc:                      ; encript loop
+        
         mov cl, [eax+ebx]
-        ;sub edx, '0'
-        add cl, [rot_value]
+
+
+
+        cmp cl, ' '
+        jne _rot
+
+
         mov [cript+ebx], ecx
+
         inc ebx
         jmp _encript
 
+    _rot:                       ; non space character
+        add cl, [edx]
+        sub cl, '0'
+
+        cmp cl, 'z'
+        jg _gt
+
+        mov [cript+ebx], ecx
+
+        inc ebx
+        jmp _encript
+
+    _gt:                        ; greater than 26 (z)
+        sub cl, 26
+
+        mov [cript+ebx], ecx
+
+        inc ebx
+        jmp _encript
 
 
 _usage:
@@ -87,7 +130,6 @@ _print:
     mov ecx, [esp+0x04]
     mov ebx, 0x01
     mov eax, 0x04
-
     int 0x80
 
     ret
